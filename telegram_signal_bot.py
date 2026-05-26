@@ -11,7 +11,7 @@ from bot import analyze
 
 from config import TELEGRAM_BOT_TOKEN
 
-DASHBOARD_URL = "https://odd-aliens-go.loca.lt/"
+DASHBOARD_URL = "cryptoaibot..streamlit.app"
 
 # ==========================================
 # START
