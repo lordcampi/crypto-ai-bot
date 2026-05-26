@@ -11,6 +11,10 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from config import *
 
+# ==========================================
+# CRYPTOS
+# ==========================================
+
 SYMBOLS = [
     "BTCUSDT",
     "ETHUSDT",
@@ -20,7 +24,7 @@ SYMBOLS = [
 ]
 
 # ==========================================
-# BINANCE DATA
+# GET BINANCE DATA
 # ==========================================
 
 def get_data(symbol):
@@ -33,34 +37,45 @@ def get_data(symbol):
         "limit": 500
     }
 
-    data = requests.get(
-        url,
-        params=params
-    ).json()
+    try:
 
-    df = pd.DataFrame(data)
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
 
-    df = df.iloc[:, :6]
+        data = response.json()
 
-    df.columns = [
-        "time",
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume"
-    ]
+        df = pd.DataFrame(data)
 
-    for col in [
-        "open",
-        "high",
-        "low",
-        "close",
-        "volume"
-    ]:
-        df[col] = df[col].astype(float)
+        df = df.iloc[:, :6]
 
-    return df
+        df.columns = [
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ]
+
+        for col in [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume"
+        ]:
+            df[col] = df[col].astype(float)
+
+        return df
+
+    except Exception as e:
+
+        print(f"❌ Error Binance {symbol}: {e}")
+
+        return None
 
 # ==========================================
 # INDICATORS
@@ -150,17 +165,27 @@ def news_sentiment(symbol):
 
     try:
 
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=10
+        )
 
-        articles = response.json()[
-            "articles"
-        ][:10]
+        articles = response.json().get(
+            "articles",
+            []
+        )[:10]
+
+        if len(articles) == 0:
+            return 0
 
         scores = []
 
         for article in articles:
 
-            title = article["title"]
+            title = article.get(
+                "title",
+                ""
+            )
 
             sentiment = analyzer.polarity_scores(
                 title
@@ -172,7 +197,9 @@ def news_sentiment(symbol):
 
         return np.mean(scores)
 
-    except:
+    except Exception as e:
+
+        print(f"❌ Error NewsAPI {symbol}: {e}")
 
         return 0
 
@@ -209,7 +236,7 @@ def calculate_risk(price):
     }
 
 # ==========================================
-# MAIN ANALYSIS
+# ANALYZE
 # ==========================================
 
 def analyze():
@@ -218,69 +245,93 @@ def analyze():
 
     for symbol in SYMBOLS:
 
+        print(f"📊 Analizando {symbol}")
+
         df = get_data(symbol)
 
-        df = add_indicators(df)
+        if df is None:
+            continue
 
-        model = train_model(df)
+        try:
 
-        latest = df.iloc[-1:]
+            df = add_indicators(df)
 
-        features = [
-            "rsi",
-            "ema20",
-            "ema50",
-            "macd",
-            "macd_signal",
-            "return"
-        ]
+            model = train_model(df)
 
-        probability = model.predict_proba(
-            latest[features]
-        )[0][1]
+            latest = df.iloc[-1:]
 
-        sentiment = news_sentiment(symbol)
+            features = [
+                "rsi",
+                "ema20",
+                "ema50",
+                "macd",
+                "macd_signal",
+                "return"
+            ]
 
-        volume_score = (
-            latest["volume"].values[0]
-            /
-            df["volume"].mean()
-        )
+            probability = model.predict_proba(
+                latest[features]
+            )[0][1]
 
-        score = (
-            probability * 0.5
-            +
-            ((sentiment + 1) / 2) * 0.2
-            +
-            min(volume_score / 2, 1) * 0.3
-        )
+            sentiment = news_sentiment(symbol)
 
-        price = latest[
-            "close"
-        ].values[0]
+            volume_score = (
+                latest["volume"].values[0]
+                /
+                df["volume"].mean()
+            )
 
-        risk = calculate_risk(price)
+            score = (
+                probability * 0.5
+                +
+                ((sentiment + 1) / 2) * 0.2
+                +
+                min(volume_score / 2, 1) * 0.3
+            )
 
-        results.append({
+            price = latest[
+                "close"
+            ].values[0]
 
-            "symbol": symbol,
-            "score": round(score, 3),
-            "probability": round(
-                probability * 100,
-                2
-            ),
-            "sentiment": round(
-                sentiment,
-                2
-            ),
-            "price": round(price, 2),
-            "stop_loss":
-                risk["stop_loss"],
-            "take_profit":
-                risk["take_profit"],
-            "position_size":
-                risk["position_size"]
-        })
+            risk = calculate_risk(price)
+
+            results.append({
+
+                "symbol": symbol,
+
+                "score": round(
+                    score,
+                    3
+                ),
+
+                "probability": round(
+                    probability * 100,
+                    2
+                ),
+
+                "sentiment": round(
+                    sentiment,
+                    2
+                ),
+
+                "price": round(
+                    price,
+                    2
+                ),
+
+                "stop_loss":
+                    risk["stop_loss"],
+
+                "take_profit":
+                    risk["take_profit"],
+
+                "position_size":
+                    risk["position_size"]
+            })
+
+        except Exception as e:
+
+            print(f"❌ Error análisis {symbol}: {e}")
 
     results = sorted(
         results,

@@ -1,69 +1,18 @@
+import asyncio
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    ContextTypes
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
 from bot import analyze
-
 from config import TELEGRAM_BOT_TOKEN
 
-DASHBOARD_URL = "cryptoaibot..streamlit.app"
-
 # ==========================================
-# START
+# FORMATEAR MENSAJE
 # ==========================================
 
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+def format_signal(best):
 
-    await update.message.reply_text(
-        "🚀 Escribe:\n\nObtener Señal"
-    )
-
-# ==========================================
-# MESSAGE
-# ==========================================
-
-async def message_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-
-    text = update.message.text.lower()
-
-    if text == "obtener señal":
-
-        await update.message.reply_text(
-            "📊 Analizando mercado..."
-        )
-
-        results = analyze()
-
-        best = results[0]
-
-        ranking = ""
-
-        for i, coin in enumerate(
-            results,
-            start=1
-        ):
-
-            ranking += (
-                f"{i}. "
-                f"{coin['symbol']} | "
-                f"{coin['probability']}%\n"
-            )
-
-        message = f"""
-🚀 CRYPTO AI DASHBOARD
-
-🏆 MEJOR SEÑAL
+    return f"""
+🚀 CRYPTO AI SIGNAL
 
 🪙 {best['symbol']}
 
@@ -76,46 +25,71 @@ async def message_handler(
 🎯 Take Profit:
 {best['take_profit']}
 
+📦 Tamaño posición:
+{best['position_size']}
+
 📈 Probabilidad:
 {best['probability']}%
 
-📰 Sentimiento:
-{best['sentiment']}
-
-⭐ Score:
+🧠 Score:
 {best['score']}
 
-📊 TOP CRYPTOS
-
-{ranking}
+📰 Sentimiento:
+{best['sentiment']}
 """
 
+# ==========================================
+# HANDLER PRINCIPAL
+# ==========================================
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    text = update.message.text.lower()
+
+    if "obtener señal" in text:
+
+        await update.message.reply_text("🔎 Analizando mercado...")
+
+        try:
+
+            results = analyze()
+
+            if not results:
+
+                await update.message.reply_text("❌ No se encontraron resultados")
+                return
+
+            best = results[0]
+
+            message = format_signal(best)
+
+            await update.message.reply_text(message)
+
+        except Exception as e:
+
+            await update.message.reply_text(f"❌ Error: {str(e)}")
+
+    else:
+
         await update.message.reply_text(
-            message
+            "Escribe: Obtener Señal"
         )
 
 # ==========================================
-# RUN BOT
+# MAIN
 # ==========================================
 
-app = ApplicationBuilder().token(
-    TELEGRAM_BOT_TOKEN
-).build()
+def main():
 
-app.add_handler(
-    CommandHandler(
-        "start",
-        start
-    )
-)
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-app.add_handler(
-    MessageHandler(
-        filters.TEXT,
-        message_handler
-    )
-)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-print("BOT INICIADO")
+    print("🤖 Bot corriendo...")
 
-app.run_polling()
+    app.run_polling()
+
+# ==========================================
+
+if __name__ == "__main__":
+    main()
