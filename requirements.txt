@@ -1,0 +1,11 @@
+streamlit
+streamlit-autorefresh
+pandas
+numpy
+requests
+scikit-learn
+ta
+plotly
+vaderSentiment
+python-telegram-bot
+pyngrok
